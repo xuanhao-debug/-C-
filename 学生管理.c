@@ -921,13 +921,280 @@ void updateToDoItem(int id, int newStatus) {
 }
 }
 
+//10. 菜单逻辑
 
+//学生菜单
+void studentMenu() {
+    int choice;
+    do {
+        printf("\n======== 学生端 ========\n");
+        printf("当前用户: %s\n", currentUser.username);
+        printf("1. 查询个人信息\n");
+        printf("2. 查看班级排名\n");
+        printf("3. 查看成绩分布图\n");
+        printf("4. 申请重置密码\n");
+        printf("5. 成绩申诉\n");
+        printf("0. 注销登录\n");
+        choice = readInt("请选择: ", 0, 5);
+        switch(choice) {
+            case 1: {
+                Student *myInfo = findStudentById(currentUser.id);
+                if (myInfo) {
+                    printTableHeader();
+                    printStudentRow(myInfo);
+                }else {
+                    printf("系统里还没录入您的档案，请联系老师录入\n(当前绑定ID: %s)\n", currentUser.id);
+                }
+                pauseStytem();
+                break;
+            }
+            case 2: {
+                int option;
+                option = readInt("输入科目(1.总分 2.C语言 3.数学 4.英语)", 1, 4);
+                sortStudents(option, 2);
+                viewWithPagination();
+                break;
+            }
+            case 3: 
+                performStatistics();
+                break;
+            case 4: {
+                char pwd[MAX_PWD_LEN];
+                printf("请输入新密码:");
+                readString(pwd, MAX_PWD_LEN);
+                
+                addToDoItem(PwdReset, currentUser.username, pwd);
+                break;
+            }
+            case 5: {
+                char reason[100];
+                printf("输入您的成绩申诉理由 :\n");
+                readString(reason, 100);
 
+                addToDoItem(Appeal, currentUser.id, reason);
 
+                break;
+            }
+            case 0: break;
+        }
+    }while (choice != 0);
+}
 
+//教师菜单
+void teacherMenu() {
+    int choice;
+    do {
+       printf("\n======== 教师端 ========\n");
+        printf("1. 录入新学生\n");
+        printf("2. 浏览学生列表 (支持翻页)\n");
+        printf("3. 查找学生\n");
+        printf("4. 修改学生信息\n");
+        printf("5. 删除学生\n");
+        printf("6. 成绩排序\n");
+        printf("7. 统计分析\n");
+        printf("0. 注销登录\n");
+        choice = readInt("请选择: ", 0, 7);
 
+        switch (choice) {
+            case 1: 
+                addNewStudent();
+                break;
+            case 2:
+                viewWithPagination();
+                break;
+            case 3:
+                searchMenu();
+                break;
+            case 4: 
+                modifyStudentMenu();
+                break;
+            case 5: {
+                char id[MAX_ID_LEN];
+                printf("输入要删除的学号: ");
+                readString(id, MAX_ID_LEN);
+                if (deleteStudentNode(id)) {
+                    printf("删除成功\n");
+                    saveToBinaryFile();
+                }else {
+                    printf("删除失败,没找到该学号\n");
+                }
+                pauseStytem();
+                break;
+            }
+            case 6:
+                menuSort();
+                break;
+            case 7:
+                performStatistics();
+                break;
+            case 0: break;
+        }
+    }while (choice != 0);
+}
 
+//管理员菜单
+void adminMenu() {
+    int choice;
+    do {
+        printf("\n======== 管理员后台 ========\n");
+        printf("1. 添加教师账号\n");
+        printf("2. 添加学生账号\n");
+        printf("3. 查看所有账号\n");
+        printf("4. 进入教师模式 (管理数据)\n");
+        printf("5. 清空所有数据 (慎用)\n");
+        printf("6. 处理待办事项\n");
+        printf("7. 强制修改账号密码\n");
+        printf("8. 删除账号\n");
+        printf("9. 导出所有账号密码\n");
+        printf("0. 注销登录\n");
+        choice = readInt("请选择: ", 0, 9);
 
+        switch (choice) {
+            case 1: 
+                registerUser(2); 
+                break;
+            case 2: 
+                registerUser(1); 
+                break;
+            case 3: 
+                listAllUsers(); 
+                break;
+            case 4: 
+                menuTeacher(); 
+                break; 
+            case 5: {
+                printf("这将删除所有学生数据！确认吗 (y/n): ");
+                char confirm[5]; readString(confirm, 5);
+                if (confirm[0] == 'y') {
+                    freeAllStudents();
+                    remove(DATA_FILE);
+                    printf("数据已重置。\n");
+                    initList(); // 重新初始化
+                }
+                break;
+            }
+            case 6: {
+                int id;
+                int choice;
+                do {
+                    system("clear");
+                    viewToDoItems();
+
+                    id = readInt("请输入想要处理的申请流水号(输入0返回):", 0, 999);
+
+                    if (id == 0) break;
+
+                    choice = readInt("请审核(1.通过, 2.拒绝):", 1, 2);
+
+                    updateTodoStatus(id, choice);
+
+                    printf("处理完毕,按回车继续\n");
+                    pauseSystem();
+                }while (1);
+                break;
+            }
+            case 7: {
+                char targetUser[30];
+                char newPwd[MAX_PWD_LEN];
+                printf("输入要重置密码的用户名:\n");
+                readString(targetUser, 30);
+                printf("输入新密码:\n");
+                readString(newPwd, MAX_PWD_LEN);
+
+                FILE *fp = fopen("users.dat", "rb+");
+                if (fp == NULL) break;
+
+                User u;
+                int found = 0;
+                while (fread(&u, sizeof(User), 1, fp)) {
+                    if (strcmp(u.username, targetUser) == 0) {
+                        found = 1;
+                        strcpy(u.password, newPwd);
+
+                        fseek(fp, -((long)sizeof(User)), SEEK_CUR);
+
+                        fwrite(&u, sizeof(User), 1, fp);
+                        printf("用户%s的密码已经修改\n", targetUser);
+                        break;
+                    }
+                }
+                if (found == 0) printf("未找到用户\n");
+                fclose(fp);
+                pauseSystem();
+                break;
+            }
+            case 8: {
+                char targetUser[30];
+                printf("输入要删除的用户名\n");
+                readString(targetUser, 30);
+                //防止删除自己
+                if (strcmp(targetUser, currentUser.username) == 0) {
+                    printf("不能删除自己\n");
+                    pauseSystem();
+                    break;
+                }
+
+                FILE *fp = fopen("users.dat", "rb");
+                FILE *tempFp = fopen("temp.dat", "wb");
+                User u;
+                int found = 0;
+
+                while (fread(&u, sizeof(User), 1, fp)) {
+                    if (strcmp(u.username, targetUser) != 0) {
+                        fwrite(&u, sizeof(User), 1, tempFp);
+                    }else {
+                        found = 1;
+                    }
+                }
+                fclose(fp);
+                fclose(tempFp);
+
+                if (found) {
+                    remove("users.dat");//销毁旧文件
+                    rename("temp.dat", "users.dat");
+                    printf("用户%s已被删除\n", targetUser);
+                }else {
+                    remove("temp.dat");
+                    printf("没找到\n");
+                }
+                pauseSystem();
+                break;
+            }
+            case 9: {
+                FILE *fp = fopen(USER_FILE, "rb");
+                //打开一个新的csv文件
+                FILE *exportFp = fopen("users_ex.csv", "w");
+                if (!fp || !exportFp) {
+                    printf("打开失败\n");
+                    break;
+                }
+
+                //写入csv的表头
+                fprintf(exportFp, "用户名,关联ID,密码,角色\n");
+
+                User u;
+                int cnt = 0;
+
+                while (fread(&u, sizeof(User), 1, fp)) {
+                    char roleName[10];
+                    if (u.role == 1) strcpy(roleName, "学生");
+                    else if(u.role == 2) strcpy(roleName, "老师");
+                    else strcpy(roleName, "管理员");
+
+                    fprintf(exportFp, "%s, %s, %s, %s\n", u.username, u.id, u.password, roleName);
+                    cnt++;
+                }
+                fclose(fp);
+                fclose(exportFp);
+                printf("导出了%d个账号到users_ex.csv中\n", cnt);
+
+                pauseSystem();
+                break;
+            }
+            case 0: break;
+        }
+    } while (choice != 0);
+}
 
 int main() {
     // 1. 初始化系统
@@ -939,7 +1206,7 @@ int main() {
     int mainChoice;
     while (1) {
         printf("\n########################################\n");
-        printf("#       学生信息管理系统 V2.1      #\n");
+        printf("#       学生信息管理系统       #\n");
         printf("########################################\n");
         printf("1. 登录系统\n");
         printf("2. 注册账号 (默认注册为学生)\n");
@@ -956,20 +1223,19 @@ int main() {
             break;
         }
         else if (mainChoice == 2) {
-            
+            registerUser(1);
         }
         else if (mainChoice == 1) {
             if (performLogin()) {
                 printf("登录成功！欢迎, %s\n", currentUser.username);
                 // 根据权限分发
-                if (currentUser.role == 1) 
-                else if (currentUser.role == 2) 
-                else if (currentUser.role == 3) 
+                if (currentUser.role == 1) studentMenu();
+                else if (currentUser.role == 2) teacherMenu();
+                else if (currentUser.role == 3) adminMenu();
             } else {
                 printf("登录失败：账号或密码错误。\n");
             }
         }
     }
-
     return 0;
 }

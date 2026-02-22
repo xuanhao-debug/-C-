@@ -751,6 +751,175 @@ void listAllUsers() {
     pauseStytem();
 }
 
+//9. 待办事项管理
+
+int getNewId() {
+    FILE *fp = fopen("todo.dat", "rb");
+    if (!fp) return 101;//第一次从101开始
+
+    fseek(fp, 0, SEEK_END);
+    if (ftell(fp) == 0) {
+        fclose(fp);
+        return 101;
+    }
+
+    //fseek函数参数的要求，防止取负数时发生溢出翻转
+    //sizeof算出来是size_t无符号整型不能取负
+    fseek(fp, -((long)sizeof(ToDoItem)), SEEK_END);
+
+    ToDoItem temp;
+    fread(&temp, sizeof(ToDoItem), 1, fp);
+
+    fclose(fp);
+    return temp.id + 1;
+}
+
+//添加待办事项
+void addToDoItem(int type, char *sender, char *content) {
+   int id = getNewId();
+   ToDoItem t;
+   t.id = id;
+   t.type = type;
+   t.status = 0;//默认状态
+   strcpy(t.sender, sender);
+   strcpy(t.content, content);
+
+   FILE *fp = fopen("todo.dat", "ab");
+   if (fp) {
+        fwrite(&t, sizeof(ToDoItem), 1, fp);
+        fclose(fp);
+        printf("申请已提交，流水号: %d\n", id);
+   }else {
+        printf("文件无法打开\n");
+        return;
+   }
+}
+
+//管理员查看待办事项
+void viewToDoItems() {
+    FILE *fp = fopen("todo.dat", "rb");
+    if (!fp) {
+        printf("当前无待办事项\n");
+        return;
+    }
+
+    ToDoItem item;
+    printf("\n==== 代办事项列表 ====\n");
+    printf("%-5s | %-10s | %-15s | %-30s\n", "ID", "类型", "申请人", "详情/内容");
+    printf("--------------------------\n");
+
+    while (fread(&item, sizeof(ToDoItem), 1, fp)) {
+        if (item.status != 0) continue;
+
+        printf("%-5d \n", item.id);
+
+        switch(item.type) {
+            case ReGister :
+                printf("%-10s | %-15s | 申请密码: %s\n", "账号注册", item.sender, item.content);
+                break;
+            case PwdReset :
+                printf("%-10s | %-15s | 申请密码: %s\n", "账号注册", item.sender, item.content);
+                break;
+            case Appeal :
+                printf("%-10s | %-15s | 理由: %s\n", "成绩申诉", item.sender, item.content);
+                break;
+            default :
+                printf("%-10s | %-15s | 理由: %s\n", "成绩申诉", item.sender, item.content);
+        }
+    }
+    printf("====================================================\n");
+    fclose(fp);
+}
+
+//管理员处理待办事项
+//newStatus 1表示通过 2表示不通过
+//输入管理员的ID
+void updateToDoItem(int id, int newStatus) {
+    FILE *fp = fopen("todo.dat", "rb+");
+    if (!fp) return;
+
+    ToDoItem item;
+    int found = 0;
+    while (fread(&item, sizeof(ToDoItem), 1, fp)) {
+        if (item.id == id && item.status == 0) {
+            found = 1;
+            item.status = newStatus;
+            fseek(fp, -(long)sizeof(ToDoItem), SEEK_CUR);
+            fwrite(&item, sizeof(ToDoItem), 1, fp);
+            printf("申请 (ID: %d)状态已更新", item.id);
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("未找到ID为%d的申请. \n", id);
+    }
+    fclose(fp);
+
+    //做事情
+    if (found && newStatus == 1) {
+        if (item.type == ReGister) {
+            User u;
+            strcpy(u.username, item.sender);
+            strcpy(u.password, item.content);
+            strcpy(u.id, "0000");
+            u.role = 1;
+
+            FILE *fp = fopen("users.dat", "ab");
+
+            if (fp == NULL) return;
+            
+            if (fwrite(&u, sizeof(User), 1, fp)) {
+                fclose(fp);
+            }else {
+                printf("写入失败\n");
+                fclose(fp);
+        }
+    }
+
+    else if (item.type == PwdReset) {
+        User newU;
+        FILE *fp = fopen(USER_FILE, "rb+");
+        if (!fp) return;
+
+        while (fread(&newU, sizeof(User), 1, fp)) {
+            if (strcmp(newU.username, item.sender) == 0) {
+                strcpy(newU.password, item.content);
+                fseek(fp, -(long)sizeof(User), SEEK_CUR);
+                fwrite(&newU, sizeof(User), 1, fp);
+                break;
+            }
+        }
+        fclose(fp);
+    }
+
+    else if(item.type == Appeal) {
+        Student *p = findStudentById(item.sender);
+        if (p) {
+            printf("正在处理 %s 的成绩申诉\n", p->name);
+            printf("选择要修正的科目: 1.C语言 2.数学 3.英语\n");
+            int choice = readInt("请输入选项", 1, 3);
+
+            if (choice == 1) {
+                p->score_c = readFloat("新C语言成绩: ", 0, 100);
+            }
+            else if (choice == 2) {
+                p->score_math = readFloat("新数学成绩: ", 0, 100);
+            }
+            else if (choice == 3) {
+                p->score_eng = readFloat("新英语成绩: ", 0, 100);
+            }
+            calculateStats(p);
+
+            printf("新的总分:%.1f\n", p->total);
+            saveToBinaryFile();
+        }
+        else {
+            printf("没找到id为%s的学生", item.sender);
+        }
+    }
+}
+}
 
 
 

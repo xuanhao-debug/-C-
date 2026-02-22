@@ -7,7 +7,7 @@
 #define MAX_PWD_LEN 30
 #define DATA_FILE "students.dat"   // 二进制数据文件
 #define USER_FILE "users.dat"      // 用户账号文件
-#define PAGE_SIZE 10               // 每页显示行数
+#define PAGE_SIZE 5              // 每页显示行数
 
 #define ReGister   1
 #define PwdReset    2//密码找回和密码重置时都在2里面，或者说，密码找回就是密码重置
@@ -246,7 +246,7 @@ void loadFromBinaryFile() {
 //4. 排序
 void swapNodeData(Student *a, Student *b) {
     Student temp;
-    // 备份a的数据
+    //temp = a
     strcpy(temp.id, a->id);
     strcpy(temp.name, a->name);
     strcpy(temp.gender, a->gender);
@@ -257,7 +257,7 @@ void swapNodeData(Student *a, Student *b) {
     temp.total = a->total;
     temp.average = a->average;
 
-    // a = b
+    //a = b
     strcpy(a->id, b->id);
     strcpy(a->name, b->name);
     strcpy(a->gender, b->gender);
@@ -268,7 +268,7 @@ void swapNodeData(Student *a, Student *b) {
     a->total = b->total;
     a->average = b->average;
 
-    // b = temp
+    //b = temp
     strcpy(b->id, temp.id);
     strcpy(b->name, temp.name);
     strcpy(b->gender, temp.gender);
@@ -334,9 +334,177 @@ void menuSort() {
     pauseStytem();
 }
 
+// 5. 分页显示
 
+//打印表头
+void printTableHeader() {
+    printf("\n%-10s %-10s %-6s %-4s %-6s %-6s %-6s %-6s %-6s\n", 
+        "学号", "姓名", "性别", "年龄", "C语言", "数学", "英语", "总分", "平均分");
+    printf("------------------------------------------------------------\n");
+}
 
+//每一行的内容
+void printStudentRow(Student *p) {
+    printf("%-10s %-10s %-6s %-4d %-6.1f %-6.1f %-6.1f %-6.1f %-6.1f\n",
+           p->id, p->name, p->gender, p->age,
+           p->score_c, p->score_math, p->score_eng, p->total, p->average);
+}
 
+//分页查看
+void viewWithPagination() {
+    if (head == NULL) {
+        printf("还没有数据\n");
+        pauseStytem();
+        return;
+    }
+
+    Student *cur = head->next;
+    int pageNumber = 1;
+
+    while (1) {
+        printf("\n\n\n\n\n");
+        printf(">>> 第 %d 页 <<<\n", pageNumber);
+        printTableHeader();
+
+        Student *iter = cur;
+        int cnt = 0;
+        
+        //打印当前页
+        while (iter != NULL && cnt < PAGE_SIZE) {
+            printStudentRow(iter);
+            iter = iter->next;
+            cnt++;
+        }
+
+        printf("--------------------------------------------------\n");
+        printf("操作: [N]下一页 [P] 上一页 [Q]退出\n");
+        printf("输入选择:");
+        
+        char cmd[10];
+        readString(cmd, 10);
+
+        if (cmd[0] == 'n' || cmd[0] == 'N') {
+            Student *temp = cur;
+            int step = 0;
+
+            while (temp != NULL && step < PAGE_SIZE) {
+                temp = temp->next;
+                step++;
+            }
+            
+            if (temp != NULL) {
+                cur = temp;
+                pageNumber++;
+            }else {
+                printf("已经是最后一页了\n");
+                pauseStytem();
+            }
+        }else if (cmd[0] == 'p' || cmd[0] == 'P') {
+            //cur指针必定是在每一页的开头，所以先检查前面有没有节点，有的话就肯定还有上一页
+            if (cur->prev != head && cur->prev) {
+                Student *temp = cur;
+                int step = 0;
+                while (temp->prev != head && step < PAGE_SIZE) {
+                    temp = temp->next;
+                    step++;
+                }
+                cur = temp;
+                pageNumber--;
+            }else {
+                printf("已经是第一页了");
+                pauseStytem();
+            }
+        }else if (cmd[0] == 'q' || cmd[0] == 'Q') {
+            break;
+        }
+    }
+}
+
+//6. 统计与成绩分析
+
+//单个科目的条形统计图
+//ranges装的每个级别的人数
+void drawSubjectBar(const char *subName, int ranges[]) {
+    printf("\n[%s成绩分布]\n", subName);
+    char *lables[] = {"<60", "60-69", "70-79", "80-89", ">=90"};
+    for (int i = 0; i < 5; i++) {
+        printf("%s | ", lables[i]);
+        //打印#号
+        for (int j = 0; j < ranges[i]; j++) {
+            printf("#");
+        }
+        printf("(%d)\n", ranges[i]);
+    }
+}
+
+//综合统计
+void performStatistics() {
+    if (!head) {
+        printf("暂无数据\n");
+        return;
+    }
+
+    int cnt = 0;
+    float sumC = 0, sumM = 0, sumE = 0;
+    float maxC = -1, maxM = -1, maxE = -1;
+    float minC = 101, minM = 101, minE = 101;
+
+    int distC[5] = {0}, distM[5] = {0}, distE[5] = {0};
+
+    Student *p = head->next;
+    while (p) {
+        cnt++;
+        sumC += p->score_c;
+        sumM += p->score_math;
+        sumE += p->score_eng;
+
+        // 更新最值
+        if (p->score_c > maxC) maxC = p->score_c;
+        if (p->score_c < minC) minC = p->score_c;
+        if (p->score_math > maxM) maxM = p->score_math;
+        if (p->score_math < minM) minM = p->score_math;
+        if (p->score_eng > maxE) maxE = p->score_eng;
+        if (p->score_eng < minE) minE = p->score_eng;
+
+        // 统计C语言分布
+        if (p->score_c < 60) distC[0]++;
+        else if (p->score_c < 70) distC[1]++;
+        else if (p->score_c < 80) distC[2]++;
+        else if (p->score_c < 90) distC[3]++;
+        else distC[4]++;
+
+        // 统计数学分布
+        if (p->score_math < 60) distM[0]++;
+        else if (p->score_math < 70) distM[1]++;
+        else if (p->score_math < 80) distM[2]++;
+        else if (p->score_math < 90) distM[3]++;
+        else distM[4]++;
+        
+        // 统计英语分布
+        if (p->score_eng < 60) distE[0]++;
+        else if (p->score_eng < 70) distE[1]++;
+        else if (p->score_eng < 80) distE[2]++;
+        else if (p->score_eng < 90) distE[3]++;
+        else distE[4]++;
+
+        p = p->next;
+    }
+    printf("\n======= 班级成绩统计报告 =======\n");
+    printf("总人数: %d\n", cnt);
+    printf("C语言  - 平均: %5.2f | 最高: %5.1f | 最低: %5.1f | 及格率: %5.1f%%\n", 
+           sumC/cnt, maxC, minC, (float)(cnt-distC[0])/cnt*100);
+    printf("数学   - 平均: %5.2f | 最高: %5.1f | 最低: %5.1f | 及格率: %5.1f%%\n", 
+           sumM/cnt, maxM, minM, (float)(cnt-distM[0])/cnt*100);
+    printf("英语   - 平均: %5.2f | 最高: %5.1f | 最低: %5.1f | 及格率: %5.1f%%\n", 
+           sumE/cnt, maxE, minE, (float)(cnt-distE[0])/cnt*100);
+
+    printf("\n======= 图表分析 =======\n");
+    drawSubjectBar("C语言", distC);
+    drawSubjectBar("数学 ", distM);
+    drawSubjectBar("英语 ", distE);
+    
+    pauseSystem();
+}
 
 
 
